@@ -29,12 +29,12 @@ def loadModel(name="ae"):
 
     if "ae" in name.lower() and not "vae" in name.lower():
         weights_path = os.path.join(weights_dir, f'{name}.pth.tar')
-        model = ae.AE(32)
+        model = ae.AE(32, activation_str='relu')
         model.load_state_dict(torch.load(weights_path, map_location=torch.device('cpu'))['state_dict'])
     
     elif "vae" in name.lower():
         weights_path = os.path.join(weights_dir, f'{name}.pth.tar')
-        model = vae.BetaVAE(32)
+        model = vae.BetaVAE(32, activation_str='relu')
         model.load_state_dict(torch.load(weights_path, map_location=torch.device('cpu'))['state_dict'])    
     else:
         raise NotImplementedError(("Model '{}' is not a valid model. " +
@@ -156,11 +156,9 @@ def plot(data, dataset, model='ae', start=0, end=10, show_image=True, binary=Tru
             sampled_data.append(data[sampled_indices])
 
         data = np.concatenate(sampled_data, axis=0)
-    
+
     y = data[:,4]
     X = data[:,5:]
-    ts = TS(n_components=2, learning_rate='auto', n_iter=1000, verbose=3)
-    X_ts = ts.fit_transform(X)
 
     if show_image:
         # select samples
@@ -175,7 +173,6 @@ def plot(data, dataset, model='ae', start=0, end=10, show_image=True, binary=Tru
         
             samples = np.concatenate([samples_red, samples_green])
         else:
-            np.random.seed(1000)
             samples = []
             labels = np.unique(y)
             for label in labels:
@@ -184,6 +181,8 @@ def plot(data, dataset, model='ae', start=0, end=10, show_image=True, binary=Tru
                     samples.extend(np.random.choice(label_indices, 2, replace=False))
                 else:
                     samples.extend(label_indices)
+        ts = TS(n_components=2, learning_rate='auto', n_iter=1000, verbose=3, random_state=1000)
+        X_ts = ts.fit_transform(X)
         fig = plt.figure()
         sfigs = fig.subfigures(1,2)
         ax1 = sfigs[0].add_subplot()
@@ -231,6 +230,8 @@ def plot(data, dataset, model='ae', start=0, end=10, show_image=True, binary=Tru
         
         plt.show()
     else:
+        ts = TS(n_components=2, learning_rate='auto', n_iter=1000, verbose=3, random_state=1000)
+        X_ts = ts.fit_transform(X)
         plt.scatter(X_ts[:, 0], X_ts[:, 1], c=np.where(y == 1, 'g', np.where(y == 2, 'y',  np.where(y == 3, 'm', np.where(y == 4, 'k', np.where(y == 5, 'b', 'r'))))), s=2)
         plt.xticks([], [])
         plt.yticks([], [])
@@ -240,7 +241,7 @@ def plot(data, dataset, model='ae', start=0, end=10, show_image=True, binary=Tru
             plt.savefig(f'results/TSNE/ae_{start}_{end}.png')
         plt.close()
 
-def run_clustering(model='ae', dataset='EMBL', start=0, end=10, dims=[100], stride=2, show_image=True, binary=True):
+def run_clustering(model='ae', dataset='EMBL', start=0, end=10, dims=[90], stride=2, show_image=True, binary=True):
     np.random.seed(1000)
     encode_dataset(dataset, model, stride=stride, dims=dims, start=start, end=end, binary=binary)
     
