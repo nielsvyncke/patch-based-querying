@@ -175,6 +175,7 @@ def plot(data, dataset, model='ae', start=0, end=10, show_image=True, binary=Tru
         
             samples = np.concatenate([samples_red, samples_green])
         else:
+            np.random.seed(1000)
             samples = []
             labels = np.unique(y)
             for label in labels:
@@ -190,7 +191,7 @@ def plot(data, dataset, model='ae', start=0, end=10, show_image=True, binary=Tru
         plt.yticks([], [])
         ax2 = sfigs[1].add_subplot()
         plt.axis('off')
-        image = openImage(path + data_path+os.listdir(path + data_path)[0])
+        image = openImage(path + data_path+os.listdir(path + data_path)[start])
         image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
         for index, sample in enumerate(samples):
             if binary:
@@ -234,9 +235,9 @@ def plot(data, dataset, model='ae', start=0, end=10, show_image=True, binary=Tru
         plt.xticks([], [])
         plt.yticks([], [])
         if "vae" in model:
-            plt.savefig(f'results/EMBL/vae_{start}_{end}.png')
+            plt.savefig(f'results/TSNE/vae_{start}_{end}.png')
         else:
-            plt.savefig(f'results/EMBL/ae_{start}_{end}.png')
+            plt.savefig(f'results/TSNE/ae_{start}_{end}.png')
         plt.close()
 
 def run_clustering(model='ae', dataset='EMBL', start=0, end=10, dims=[100], stride=2, show_image=True, binary=True):
@@ -264,6 +265,6 @@ if __name__ == "__main__":
             run_clustering(model='vae_finetuned', dataset='EMBL', start=i, end=i+10, show_image=False)
         run_clustering(model='vae_finetuned', dataset='EMBL', start=0, end=65, show_image=False)
     elif sys.argv[1] == "exp7":
-        run_clustering(model='ae_finetuned', dataset='VIB', start=210, end=215, binary=False, dims=range(40,70,2), stride=4)
+        run_clustering(model='ae_finetuned', dataset='VIB', start=210, end=215, binary=False, dims=range(40,71,2), stride=4)
     elif sys.argv[1] == "exp8":
-        run_clustering(model='vae_finetuned', dataset='VIB', start=210, end=215, binary=False, dims=range(40,70,2), stride=4)
+        run_clustering(model='vae_finetuned', dataset='VIB', start=210, end=215, binary=False, dims=range(40,71,2), stride=4)
