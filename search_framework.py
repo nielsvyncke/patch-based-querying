@@ -1,5 +1,5 @@
-import math
 import os
+import sys
 import random
 import numpy as np
 import pandas as pd
@@ -9,9 +9,6 @@ import torch
 from annoy import AnnoyIndex
 from models.ae import AE
 from models.vae import BetaVAE
-import argparse
-import json
-import shutil
 import time
 import matplotlib.pyplot as plt
 from tabulate import tabulate
@@ -135,40 +132,9 @@ def encodeImage(patch, model):
     # return encoding
     return encoding.detach().cpu().numpy().flatten()
 
-def run_search_pipeline(input_dir, encoder, batch_size, structure=1, num_neighbors=1, dims=[80], min_overlap=0.5):
-    """
-    Run the search pipeline for a given configuration
-    """
-    print(f"Running search pipeline for {encoder}, batch_size={batch_size}, dataset={input_dir}")
-    
-    # Set up directories
-    raw_dir = os.path.join("images", input_dir, "raw")
-    label_dir = os.path.join("images", input_dir, "labels")
-    
-    if not os.path.exists(raw_dir) or not os.path.exists(label_dir):
-        print(f"Warning: Dataset directories not found for {input_dir}")
-        return None
-    
-    raw_files = sorted([os.path.join(raw_dir, f) for f in os.listdir(raw_dir) if f.endswith(".png")])
-    label_files = sorted([os.path.join(label_dir, f) for f in os.listdir(label_dir) if f.endswith(".png")])
-    
-    num_slices = len(raw_files)
-    latent_size = 32
-    
-    # Load model
-    model = loadModel(encoder)
-    
-    # Encode all patches
+def construct_query_trees(query_idxs, model, raw_files, label_files, structure=1, dims=[80], min_overlap=0.5, latent_size=32):
     queries = PatchInfoList()
     
-    # Select middle slice from every batch
-    query_idxs = [batch_size * i + batch_size // 2 for i in range(num_slices // batch_size)]
-    # Take the middle of the remaining slices
-    if num_slices % batch_size != 0:
-        query_idxs.append(num_slices - (num_slices % batch_size) // 2 - 1)
-    
-    # Start timer
-    start = time.time()
     for slice_idx in query_idxs:
         # Get label image
         label_img = io.imread(label_files[slice_idx])
@@ -202,6 +168,205 @@ def run_search_pipeline(input_dir, encoder, batch_size, structure=1, num_neighbo
         elif overlap == 0:
             neg_search_tree.addVector(patch_encoding, record)
         slice_idx_prev = slice_idx
+    return pos_search_tree, neg_search_tree
+
+def get_single_queries(query_idxs, model, raw_files, label_files, structure=1, dims=[80], min_overlap=0.5, latent_size=32):
+    pos_search_tree, neg_search_tree = construct_query_trees(query_idxs, model, raw_files, label_files, structure, dims, min_overlap, latent_size)
+
+    # select random query
+    while True:
+        pos_query = pos_search_tree.items[random.randint(0, len(pos_search_tree.items))]
+        neg_query = neg_search_tree.items[random.randint(0, len(neg_search_tree.items))]
+        
+        pos_slice_idx, pos_x, pos_y, pos_dim = pos_query[0].getLoc()
+        neg_slice_idx, neg_x, neg_y, neg_dim = neg_query[0].getLoc()
+        slice_pos = io.imread(raw_files[pos_slice_idx])
+        slice_neg = io.imread(raw_files[neg_slice_idx])
+        patch_pos = slice_pos[pos_x:pos_x+pos_dim, pos_y:pos_y+pos_dim]
+        patch_neg = slice_neg[neg_x:neg_x+neg_dim, neg_y:neg_y+neg_dim]
+        dim = dims[0]
+        if patch_pos.shape == (dim, dim) and patch_neg.shape == (dim, dim):
+            break
+
+    pos_search_tree = SearchTree(latent_size)
+    neg_search_tree = SearchTree(latent_size)
+    pos_search_tree.addVector(pos_query[1], pos_query[0])
+    neg_search_tree.addVector(neg_query[1], neg_query[0])
+
+    return pos_search_tree, neg_search_tree
+
+def retrieved_patches_single_query(dataset, structure=1, num_neighbors=1, dims=[80], min_overlap=0.5):
+    input_dir = dataset
+    dataset_size = 50
+    models = ["ae_finetuned", "vae_finetuned"]
+    
+    for encoder in models:
+        random.seed(42)
+        print(f"Processing {encoder}")
+        # Set up directories
+        raw_dir = os.path.join("images", input_dir, "raw")
+        label_dir = os.path.join("images", input_dir, "labels")
+        
+        if not os.path.exists(raw_dir) or not os.path.exists(label_dir):
+            print(f"Warning: Dataset directories not found for {input_dir}")
+            return None
+    
+        raw_files = sorted([os.path.join(raw_dir, f) for f in os.listdir(raw_dir) if f.endswith(".png")])[:dataset_size]
+        label_files = sorted([os.path.join(label_dir, f) for f in os.listdir(label_dir) if f.endswith(".png")])[:dataset_size]
+        
+        num_slices = len(raw_files)
+        latent_size = 32
+        
+        # Load model
+        model = loadModel(encoder)
+
+        query_idxs = range(num_slices//2 - 1, num_slices//2 + 2)
+
+        pos_search_tree, neg_search_tree = get_single_queries(query_idxs, model, raw_files, label_files, structure, dims, min_overlap, latent_size)
+        pos_query = pos_search_tree.items[0]
+        neg_query = neg_search_tree.items[0]
+        
+        # Get encodings for all patches
+        all_patches = PatchInfoList()
+
+        for slice_idx in range(0, num_slices, 3):
+            if slice_idx in query_idxs:
+                continue
+
+            data_img = io.imread(raw_files[slice_idx])
+            label_img = io.imread(label_files[slice_idx])
+
+            for dim in dims:
+                for x in range(0, data_img.shape[0], dim):
+                    for y in range(0, data_img.shape[1], dim):
+                        # Calculate overlap
+                        label = label_img[x:x+dim, y:y+dim]
+                        overlap = np.mean(label == structure)
+                        # Add to encodings
+                        record = PatchInfoRecord(slice_idx, x, y, dim, overlap)
+                        all_patches.addRecord(record)
+
+                        # Compute similarity
+                        patch = data_img[x:x+dim, y:y+dim]
+                        patch_encoding = encodeImage(patch, model)
+                        # Query search tree
+                        pos_dist = pos_search_tree.queryVector(patch_encoding, num_neighbors)
+                        neg_dist = neg_search_tree.queryVector(patch_encoding, num_neighbors)
+                        # Compute similarity
+                        similarity = 1/np.exp(np.mean(pos_dist)) - 1/np.exp(np.mean(neg_dist))
+                        record.add_similarity(similarity)
+
+        # sort by similarity
+        all_patches.recordList.sort(key=lambda record: record.get_similarity(), reverse=True)   
+
+        retrieved = []
+
+        for patch in all_patches.recordList:
+            slice_idx, x, y, dim = patch.getLoc()
+            image = io.imread(label_files[slice_idx]) == structure
+            if image[x:x+dim, y:y+dim].shape != (dim, dim):
+                continue
+            num_labels, labels_img = cv.connectedComponents((image).astype(np.uint8))
+            for label in range(1, num_labels):
+                if (labels_img == label)[x:x+dim, y:y+dim].any():
+                    for retrieved_patch in retrieved:
+                        retrieved_slice_idx, retrieved_x, retrieved_y, retrieved_dim = retrieved_patch.getLoc()
+                        if retrieved_slice_idx == slice_idx:
+                            if (labels_img == label)[retrieved_x:retrieved_x+retrieved_dim, retrieved_y:retrieved_y+retrieved_dim].any():
+                                print("Patch overlaps with retrieved patch")
+                                break
+                    else:
+                        print("Patch does not overlap with retrieved patch")
+                        retrieved.append(patch)
+                        break
+            else:
+                if patch.getOverlap() > 0:
+                    continue
+                print("Patch does not overlap with structure")
+                retrieved.append(patch)
+                
+            if len(retrieved) == 10:
+                break
+        print("Retrieved", len(retrieved), "patches")
+        # plot retrieved patches in single row
+        fig, axs = plt.subplots(1, len(retrieved), figsize=(len(retrieved) * 1.1, 1.1))
+        for ax, record in zip(axs, retrieved):
+            slice_idx, x, y, dim = record.getLoc()
+            # compute overlap
+            overlap = record.getOverlap()
+            patch = io.imread(raw_files[slice_idx])[x:x+dim, y:y+dim]
+            # convert to rgb
+            patch = cv.cvtColor(patch, cv.COLOR_GRAY2RGB)
+            # add green border if overlap > 0 and red border if overlap == 0
+            if overlap > 0:
+                cv.rectangle(patch, (0, 0), (dim, dim), (0, 255, 0), 5)
+            else:
+                cv.rectangle(patch, (0, 0), (dim, dim), (255, 0, 0), 5)
+            ax.imshow(patch)
+            ax.axis("off")
+        plt.tight_layout()
+        plt.savefig(f"results/retrieved/{encoder}_{input_dir}.png", bbox_inches='tight', pad_inches=0)
+        plt.close()
+
+        # plot positive query patch
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+        slice_idx, x, y, dim = pos_query[0].getLoc()
+        patch = io.imread(raw_files[slice_idx])[x:x+dim, y:y+dim]
+        # convert to rgb
+        patch = cv.cvtColor(patch, cv.COLOR_GRAY2RGB)
+        # add green border
+        cv.rectangle(patch, (0, 0), (dim, dim), (0, 255, 0), 5)
+        ax.imshow(patch)
+        ax.axis("off")
+        plt.savefig(f"results/retrieved/{input_dir}_pos.png", bbox_inches="tight", pad_inches=0)
+        plt.close()
+
+        # plot negative query patch
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+        slice_idx, x, y, dim = neg_query[0].getLoc()
+        patch = io.imread(raw_files[slice_idx])[x:x+dim, y:y+dim]
+        # convert to rgb
+        patch = cv.cvtColor(patch, cv.COLOR_GRAY2RGB)
+        # add red border
+        cv.rectangle(patch, (0, 0), (dim, dim), (255, 0, 0), 5)
+        ax.imshow(patch)
+        ax.axis("off")
+        plt.savefig(f"results/retrieved/{input_dir}_neg.png", bbox_inches="tight", pad_inches=0)
+        plt.close()
+
+
+def run_search_pipeline(input_dir, encoder, batch_size, structure=1, num_neighbors=1, dims=[80], min_overlap=0.5):
+    """
+    Run the search pipeline for a given configuration
+    """
+    print(f"Running search pipeline for {encoder}, batch_size={batch_size}, dataset={input_dir}")
+    
+    # Set up directories
+    raw_dir = os.path.join("images", input_dir, "raw")
+    label_dir = os.path.join("images", input_dir, "labels")
+    
+    if not os.path.exists(raw_dir) or not os.path.exists(label_dir):
+        print(f"Warning: Dataset directories not found for {input_dir}")
+        return None
+    
+    raw_files = sorted([os.path.join(raw_dir, f) for f in os.listdir(raw_dir) if f.endswith(".png")])
+    label_files = sorted([os.path.join(label_dir, f) for f in os.listdir(label_dir) if f.endswith(".png")])
+    
+    num_slices = len(raw_files)
+    latent_size = 32
+    
+    # Load model
+    model = loadModel(encoder)
+
+    # Select middle slice from every batch
+    query_idxs = [batch_size * i + batch_size // 2 for i in range(num_slices // batch_size)]
+    # Take the middle of the remaining slices
+    if num_slices % batch_size != 0:
+        query_idxs.append(num_slices - (num_slices % batch_size) // 2 - 1)
+    
+    pos_search_tree, neg_search_tree = construct_query_trees(query_idxs, model, raw_files, label_files, structure, dims, min_overlap, latent_size)
 
     # Get encodings for all patches
     all_patches = PatchInfoList()
@@ -232,10 +397,6 @@ def run_search_pipeline(input_dir, encoder, batch_size, structure=1, num_neighbo
                     # Compute similarity
                     similarity = 1/np.exp(np.mean(pos_dist)) - 1/np.exp(np.mean(neg_dist))
                     record.add_similarity(similarity)
-
-    # End timer
-    end = time.time()
-    print(f"Time elapsed: {end - start}")
 
     # Create output directory and save results
     output_dir = os.path.join("data", input_dir, f"{encoder}_{batch_size}_{dims[0]}_{structure}_{num_neighbors}")
@@ -490,4 +651,9 @@ def main():
         print("No results to display. Check dataset paths and model weights.")
 
 if __name__ == "__main__":
-    main()
+    if sys.argv[1] == "run_search":
+        main()
+    if sys.argv[1] == "single_query":
+        retrieved_patches_single_query("VIB", dims=[80])
+        retrieved_patches_single_query("EMBL", dims=[100])
+        retrieved_patches_single_query("EPFL", dims=[80])

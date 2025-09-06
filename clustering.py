@@ -181,7 +181,7 @@ def plot(data, dataset, model='ae', start=0, end=10, show_image=True, binary=Tru
                     samples.extend(np.random.choice(label_indices, 2, replace=False))
                 else:
                     samples.extend(label_indices)
-        ts = TS(n_components=2, learning_rate='auto', n_iter=1000, verbose=3, random_state=1000)
+        ts = TS(n_components=2, learning_rate='auto', max_iter=1000, verbose=3, random_state=1000)
         X_ts = ts.fit_transform(X)
         fig = plt.figure()
         sfigs = fig.subfigures(1,2)
@@ -230,7 +230,7 @@ def plot(data, dataset, model='ae', start=0, end=10, show_image=True, binary=Tru
         
         plt.show()
     else:
-        ts = TS(n_components=2, learning_rate='auto', n_iter=1000, verbose=3, random_state=1000)
+        ts = TS(n_components=2, learning_rate='auto', max_iter=1000, verbose=3, random_state=1000)
         X_ts = ts.fit_transform(X)
         plt.scatter(X_ts[:, 0], X_ts[:, 1], c=np.where(y == 1, 'g', np.where(y == 2, 'y',  np.where(y == 3, 'm', np.where(y == 4, 'k', np.where(y == 5, 'b', 'r'))))), s=2)
         plt.xticks([], [])
