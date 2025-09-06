@@ -1,3 +1,12 @@
+"""t-SNE clustering and visualization for electron microscopy patches.
+
+This module provides functionality for encoding image patches using autoencoders
+and visualizing their latent representations using t-SNE dimensionality reduction.
+It supports both binary and multi-class structure labeling.
+
+Author: Niels Vyncke
+"""
+
 import sys
 import os
 import numpy as np
@@ -13,7 +22,17 @@ from matplotlib.patches import ConnectionPatch
 
 
 def openImage(name):
-    """Open an image file and return a handle to it."""
+    """Open an image file and return a handle to it.
+    
+    Args:
+        name (str): Path to the image file
+        
+    Returns:
+        np.ndarray: Loaded image array
+        
+    Raises:
+        SystemExit: If image cannot be opened
+    """
     try:
         return imageio.imread(name)
     except IOError:
@@ -21,10 +40,20 @@ def openImage(name):
         sys.exit(1)
         
 def loadModel(name="ae"):
+    """Load pre-trained autoencoder model with weights.
+    
+    Loads either an Autoencoder (AE) or Variational Autoencoder (VAE) 
+    with pre-trained weights from the weights directory.
+    
+    Args:
+        name (str): Model name, should contain 'ae' or 'vae' (default: "ae")
+        
+    Returns:
+        torch.nn.Module: Loaded model in evaluation mode on CUDA device
+        
+    Raises:
+        NotImplementedError: If model name is not recognized
     """
-        Loads the model with its precomputed parameters.
-    """
-
     weights_dir = 'weights'
 
     if "ae" in name.lower() and not "vae" in name.lower():
@@ -43,61 +72,104 @@ def loadModel(name="ae"):
     return model.cuda().eval()
 
 def getEncoding(descr, patch):
-    """
-        Computes the encoding of a given patch with a given descriptor.
-    """
+    """Compute the latent encoding of a patch using an autoencoder.
     
+    Resizes the patch to 65x65, converts to tensor format, and computes
+    the latent encoding using the provided model.
+    
+    Args:
+        descr (torch.nn.Module): Pre-trained AE or VAE model
+        patch (np.ndarray): Input image patch
+        
+    Returns:
+        np.ndarray: Flattened latent encoding vector
+        
+    Raises:
+        NotImplementedError: If descriptor type is not supported
+    """
     if isinstance(descr, ae.AE) or isinstance(descr, vae.BetaVAE):
+        # Resize patch to 65x65 and prepare tensor
         patch = np.array(resize(patch, (65, 65)))
         patch = np.expand_dims(np.expand_dims(patch, axis=0), axis=0)
         patch = torch.from_numpy(patch).float().cuda()
 
+        # Encode patch (VAE returns mean, logvar, sample - we use mean)
         if isinstance(descr, vae.BetaVAE):
             _, patch_encoding, _ = descr.encode(patch)
-
         else:
             patch_encoding = descr.encode(patch)
 
+        # Convert to numpy and flatten
         patch_encoding = patch_encoding.detach().cpu().numpy()
         patch_encoding = patch_encoding.reshape(patch_encoding.shape[0], np.prod(patch_encoding.shape[1:]))
 
     else:
-        raise NotImplementedError(("Argument 'descr' is not a valid descriptor" +
+        raise NotImplementedError(("Argument 'descr' is not a valid descriptor. " +
                 "Argument 'descr' must be of type 'AE', 'BetaVAE' but type {} was given.").format(descr.__class__))
 
     return patch_encoding[0]
 
 def label_binary(labels):
+    """Classify a patch as binary structure (background/structure).
+    
+    Args:
+        labels (np.ndarray): Label values in the patch
+        
+    Returns:
+        int: 0 for background, 1 for structure, -1 for mixed/invalid
+    """
     if np.mean(labels == 0) == 1:
-        return 0
+        return 0  # Pure background
     elif np.mean(labels == 1) > 0.5 and np.mean(labels > 1) == 0:
-        return 1
+        return 1  # Mostly structure (label 1)
     else:
-        return -1
+        return -1  # Mixed or invalid
 
 def label_multi(labels):
+    """Classify a patch for multi-class structure labeling.
+    
+    Args:
+        labels (np.ndarray): Label values in the patch
+        
+    Returns:
+        int: Structure class (1-5) or -1 for background/mixed
+    """
     if np.mean(labels == 0) == 1:
-        return -1
+        return -1  # Pure background
     elif np.mean(labels == 1) > 0.75 and np.mean(labels > 1) == 0:
-        return 1 
+        return 1  # Structure class 1
     elif np.mean(labels == 2) > 0.75 and np.mean((labels == 1) + (labels > 2)) == 0:
-        return 2
+        return 2  # Structure class 2
     elif np.mean(labels == 3) > 0.75 and np.mean((labels == 1) + (labels == 2) + (labels > 3)) == 0:
-        return 3
+        return 3  # Structure class 3
     elif np.mean(labels == 4) > 0.75 and np.mean((labels == 1) + (labels == 2) + (labels == 3) + (labels > 4)) == 0:
-        return 4
+        return 4  # Structure class 4
     elif np.mean(labels == 5) > 0.75 and np.mean((labels == 1) + (labels == 2) + (labels == 3) + (labels == 4) + (labels > 5)) == 0:
-        return 5
+        return 5  # Structure class 5
     else:
-        return -1
+        return -1  # Mixed or invalid
 
 def encode_dataset(dataset, model='ae', stride=1, dims=[64], start=0, end=10, binary=True):
+    """Encode patches from a dataset using a pre-trained autoencoder.
+    
+    Extracts patches from images, encodes them using the specified model,
+    and saves the results to CSV files for later analysis.
+    
+    Args:
+        dataset (str): Dataset name (e.g., 'EMBL', 'EPFL', 'VIB')
+        model (str): Model name to use for encoding (default: 'ae')
+        stride (int): Stride for patch extraction (default: 1)
+        dims (list): Patch dimensions to extract (default: [64])
+        start (int): Starting image index (default: 0)
+        end (int): Ending image index (default: 10)
+        binary (bool): Use binary or multi-class labeling (default: True)
+    """
     path = 'images/' + dataset + '/'
     data_path = 'raw/'
     labels_path = 'labels/'
     modelstr = model
     
-    # load model
+    # Load model
     model = loadModel(model)
     
     for index, image in enumerate(os.listdir(path + data_path)[start:end]):
@@ -242,7 +314,19 @@ def plot(data, dataset, model='ae', start=0, end=10, show_image=True, binary=Tru
         plt.close()
 
 def run_clustering(model='ae', dataset='EMBL', start=0, end=10, dims=[90], stride=2, show_image=True, binary=True):
-    np.random.seed(1000)
+    """Run complete clustering pipeline: encode dataset and generate t-SNE visualization.
+    
+    Args:
+        model (str): Model name to use for encoding (default: 'ae')
+        dataset (str): Dataset name (default: 'EMBL')
+        start (int): Starting image index (default: 0)
+        end (int): Ending image index (default: 10)
+        dims (list): Patch dimensions to extract (default: [90])
+        stride (int): Stride for patch extraction (default: 2)
+        show_image (bool): Whether to show image overlays in visualization (default: True)
+        binary (bool): Use binary or multi-class labeling (default: True)
+    """
+    np.random.seed(1000)  # Ensure reproducible results
     encode_dataset(dataset, model, stride=stride, dims=dims, start=start, end=end, binary=binary)
     
     data = load_data(dataset, model, stride=stride, dims=dims, start=start, end=end)
