@@ -381,6 +381,9 @@ def get_single_queries(query_idxs, model, raw_files, label_files, structure=1, d
 
     # Select random valid queries with correct dimensions
     dim = dims[0]
+    counter = 0
+    pos_queries = []
+    neg_queries = []
     while True:
         pos_query = pos_search_tree.items[random.randint(0, len(pos_search_tree.items) - 1)]
         neg_query = neg_search_tree.items[random.randint(0, len(neg_search_tree.items) - 1)]
@@ -394,17 +397,23 @@ def get_single_queries(query_idxs, model, raw_files, label_files, structure=1, d
         patch_neg = slice_neg[neg_x:neg_x+neg_dim, neg_y:neg_y+neg_dim]
         
         if patch_pos.shape == (dim, dim) and patch_neg.shape == (dim, dim):
-            break
+            counter += 1
+            pos_queries.append(pos_query)
+            neg_queries.append(neg_query)
+            if counter == 2:
+                break
 
     # Create new search trees with single queries
     pos_search_tree = SearchTree(latent_size)
     neg_search_tree = SearchTree(latent_size)
-    pos_search_tree.addVector(pos_query[1], pos_query[0])
-    neg_search_tree.addVector(neg_query[1], neg_query[0])
+    for pos_query in pos_queries:
+        pos_search_tree.addVector(pos_query[1], pos_query[0])
+    for neg_query in neg_queries:
+        neg_search_tree.addVector(neg_query[1], neg_query[0])
 
     return pos_search_tree, neg_search_tree
 
-def retrieved_patches_single_query(dataset, structure=1, num_neighbors=1, dims=[80], min_overlap=0.5):
+def retrieved_patches_single_query(dataset, dataset_size=5, structure=1, num_neighbors=1, dims=[80], min_overlap=0.5):
     """Retrieve and visualize patches using single query examples.
     
     Performs patch-based similarity search using single positive and negative
@@ -412,6 +421,7 @@ def retrieved_patches_single_query(dataset, structure=1, num_neighbors=1, dims=[
     
     Args:
         dataset (str): Dataset name (e.g., 'EMBL', 'EPFL', 'VIB')
+        dataset_size (int): Number of slices to use from dataset (default: 50)
         structure (int): Label value for target structure (default: 1)
         num_neighbors (int): Number of nearest neighbors for search (default: 1)
         dims (list): Patch dimensions to extract (default: [80])
@@ -421,7 +431,6 @@ def retrieved_patches_single_query(dataset, structure=1, num_neighbors=1, dims=[
         None: Saves visualization results to results/retrieved/ directory
     """
     input_dir = dataset
-    dataset_size = 50
     models = ["ae_finetuned", "vae_finetuned"]
     
     for encoder in models:
@@ -445,18 +454,16 @@ def retrieved_patches_single_query(dataset, structure=1, num_neighbors=1, dims=[
         # Load model
         model = loadModel(encoder)
 
-        query_idxs = range(num_slices//2 - 1, num_slices//2 + 2)
+        query_idxs = range(dataset_size)
 
         pos_search_tree, neg_search_tree = get_single_queries(query_idxs, model, raw_files, label_files, structure, dims, min_overlap, latent_size)
-        pos_query = pos_search_tree.items[0]
-        neg_query = neg_search_tree.items[0]
+        pos_queries = pos_search_tree.items
+        neg_queries = neg_search_tree.items
         
         # Get encodings for all patches
         all_patches = PatchInfoList()
 
-        for slice_idx in range(0, num_slices, 3):
-            if slice_idx in query_idxs:
-                continue
+        for slice_idx in range(0, num_slices):
 
             data_img = io.imread(raw_files[slice_idx])
             label_img = io.imread(label_files[slice_idx])
@@ -510,56 +517,62 @@ def retrieved_patches_single_query(dataset, structure=1, num_neighbors=1, dims=[
                 print("Patch does not overlap with structure")
                 retrieved.append(patch)
                 
-            if len(retrieved) == 10:
+            if len(retrieved) == 12:
                 break
         print("Retrieved", len(retrieved), "patches")
         # plot retrieved patches in single row
-        fig, axs = plt.subplots(1, len(retrieved), figsize=(len(retrieved) * 1.1, 1.1))
-        for ax, record in zip(axs, retrieved):
-            slice_idx, x, y, dim = record.getLoc()
-            # compute overlap
-            overlap = record.getOverlap()
+        
+        for index, slice in enumerate(raw_files):
+            fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+            image = io.imread(slice)
+            # convert to rgb
+            image = cv.cvtColor(image, cv.COLOR_GRAY2RGB)
+            patches = filter(lambda patch: patch.getLoc()[0] == index, retrieved)
+            for patch in patches:
+                slice_idx, x, y, dim = patch.getLoc()
+                # compute overlap
+                overlap = patch.getOverlap()
+                
+                # add bounding box green if overlap > 0 and red if overlap == 0
+                if overlap > 0:
+                    cv.rectangle(image, (y, x), (y + dim, x + dim), (0, 255, 0), 5)
+                else:
+                    cv.rectangle(image, (y, x), (y + dim, x + dim), (255, 0, 0), 5)
+            ax.imshow(image)
+            ax.axis("off")
+            plt.tight_layout()
+            plt.savefig(f"results/retrieved/{encoder}_{input_dir}_{index}.png", bbox_inches='tight', pad_inches=0)
+            plt.close()
+
+        # plot positive query patches
+        for i, pos_query in enumerate(pos_queries):
+            fig = plt.figure()
+            ax = fig.add_subplot(1, 1, 1)
+            slice_idx, x, y, dim = pos_query[0].getLoc()
             patch = io.imread(raw_files[slice_idx])[x:x+dim, y:y+dim]
             # convert to rgb
             patch = cv.cvtColor(patch, cv.COLOR_GRAY2RGB)
-            # add green border if overlap > 0 and red border if overlap == 0
-            if overlap > 0:
-                cv.rectangle(patch, (0, 0), (dim, dim), (0, 255, 0), 5)
-            else:
-                cv.rectangle(patch, (0, 0), (dim, dim), (255, 0, 0), 5)
+            # add green border
+            cv.rectangle(patch, (0, 0), (dim, dim), (0, 255, 0), 5)
             ax.imshow(patch)
             ax.axis("off")
-        plt.tight_layout()
-        plt.savefig(f"results/retrieved/{encoder}_{input_dir}.png", bbox_inches='tight', pad_inches=0)
-        plt.close()
+            plt.savefig(f"results/retrieved/{input_dir}_pos_{i}.png", bbox_inches="tight", pad_inches=0)
+            plt.close()
 
-        # plot positive query patch
-        fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1)
-        slice_idx, x, y, dim = pos_query[0].getLoc()
-        patch = io.imread(raw_files[slice_idx])[x:x+dim, y:y+dim]
-        # convert to rgb
-        patch = cv.cvtColor(patch, cv.COLOR_GRAY2RGB)
-        # add green border
-        cv.rectangle(patch, (0, 0), (dim, dim), (0, 255, 0), 5)
-        ax.imshow(patch)
-        ax.axis("off")
-        plt.savefig(f"results/retrieved/{input_dir}_pos.png", bbox_inches="tight", pad_inches=0)
-        plt.close()
-
-        # plot negative query patch
-        fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1)
-        slice_idx, x, y, dim = neg_query[0].getLoc()
-        patch = io.imread(raw_files[slice_idx])[x:x+dim, y:y+dim]
-        # convert to rgb
-        patch = cv.cvtColor(patch, cv.COLOR_GRAY2RGB)
-        # add red border
-        cv.rectangle(patch, (0, 0), (dim, dim), (255, 0, 0), 5)
-        ax.imshow(patch)
-        ax.axis("off")
-        plt.savefig(f"results/retrieved/{input_dir}_neg.png", bbox_inches="tight", pad_inches=0)
-        plt.close()
+        # plot negative query patches
+        for i, neg_query in enumerate(neg_queries):
+            fig = plt.figure()
+            ax = fig.add_subplot(1, 1, 1)
+            slice_idx, x, y, dim = neg_query[0].getLoc()
+            patch = io.imread(raw_files[slice_idx])[x:x+dim, y:y+dim]
+            # convert to rgb
+            patch = cv.cvtColor(patch, cv.COLOR_GRAY2RGB)
+            # add red border
+            cv.rectangle(patch, (0, 0), (dim, dim), (255, 0, 0), 5)
+            ax.imshow(patch)
+            ax.axis("off")
+            plt.savefig(f"results/retrieved/{input_dir}_neg_{i}.png", bbox_inches="tight", pad_inches=0)
+            plt.close()
 
 
 def run_search_pipeline(input_dir, encoder, batch_size, structure=1, num_neighbors=1, dims=[80], min_overlap=0.5):
