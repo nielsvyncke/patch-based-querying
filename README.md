@@ -10,51 +10,42 @@ A patch-based similarity search system for identifying structures of interest in
 
 This repository implements a comprehensive framework for patch-based querying in electron microscopy data. The system uses pre-trained autoencoders (AE) and variational autoencoders (VAE) to encode image patches into a latent space, then performs similarity search to identify structures of interest.
 
-### Key Features
-
-- **Patch-based similarity search** using learned embeddings
-- **Autoencoder support** for both AE and VAE models
-- **Approximate nearest neighbor search** using Annoy indexing
-- **Precision-recall evaluation** with comprehensive metrics
-- **t-SNE visualization** for latent space analysis
-- **Multi-dataset support** (EMBL, EPFL, VIB datasets)
-
 ### System Architecture
 
 ```
-├── src/                     # Main source code
-│   ├── core/               # Core framework classes
-│   │   ├── patch_info.py   # PatchInfoRecord, PatchInfoList
-│   │   ├── search_tree.py  # SearchTree (Annoy-based)
-│   │   ├── model_utils.py  # Model loading and encoding
-│   │   └── framework.py    # SearchFramework class
-│   ├── models/             # Neural network models
-│   │   ├── ae.py          # Autoencoder implementation
-│   │   └── vae.py         # Variational autoencoder implementation
-│   ├── experiments/        # Experiment scripts
-│   │   ├── single_query.py      # Two-query retrieval experiment
-│   │   ├── multiple_queries.py  # Multiple queries experiment
-│   │   ├── evaluation_pipeline.py # Main evaluation pipeline
-│   │   └── clustering.py        # t-SNE clustering and visualization
-│   ├── utils/              # Utility functions
-│   │   ├── query_construction.py # Query building utilities
-│   │   └── evaluation.py        # Precision-recall calculations
-│   └── visualization/      # Plotting utilities
-│       └── plotting.py     # Visualization functions
-├── scripts/                # Entry point scripts
-│   └── run_experiments.py # CLI for experiments
-├── main.py                 # Simple main entry point
-├── weights/                # Pre-trained model weights
+├── src/                            # Main source code
+│   ├── core/                       # Core framework classes
+│   │   ├── patch_info.py           # PatchInfoRecord, PatchInfoList
+│   │   ├── search_tree.py          # SearchTree (Annoy-based)
+│   │   ├── model_utils.py          # Model loading and encoding
+│   │   └── framework.py            # SearchFramework class
+│   ├── models/                     # Neural network models
+│   │   ├── ae.py                   # Autoencoder implementation
+│   │   └── vae.py                  # Variational autoencoder implementation
+│   ├── experiments/                # Experiment scripts
+│   │   ├── single_query.py         # Two-query retrieval experiment
+│   │   ├── multiple_queries.py     # Multiple queries experiment
+│   │   ├── evaluation_pipeline.py  # Main evaluation pipeline
+│   │   └── clustering.py           # t-SNE clustering and visualization
+│   ├── utils/                      # Utility functions
+│   │   ├── query_construction.py   # Query building utilities
+│   │   └── evaluation.py           # Precision-recall calculations
+│   └── visualization/              # Plotting utilities
+│       └── plotting.py             # Visualization functions
+├── scripts/                        # Entry point scripts
+│   └── run_experiments.py          # CLI for experiments
+├── main.py                         # Simple main entry point
+├── weights/                        # Pre-trained model weights
 │   ├── ae_pretrained.pth.tar
 │   ├── ae_finetuned.pth.tar
 │   ├── vae_pretrained.pth.tar
 │   └── vae_finetuned.pth.tar
-├── images/                 # Dataset directory structure
+├── images/                         # Dataset directory structure
 │   ├── EMBL/
 │   ├── EPFL/
 │   └── VIB/
-├── data/                   # Generated data and results
-└── results/                # Output visualizations and metrics
+├── data/                           # Generated data and results
+└── results/                        # Output visualizations and metrics
 ```
 
 ## Installation
@@ -135,9 +126,6 @@ python main.py multiple_queries
 Generate t-SNE visualizations of the latent space:
 
 ```bash
-# Show available clustering experiments
-python main.py clustering
-
 # Run specific clustering experiments
 python main.py clustering-exp1    # Pretrained AE on EMBL (0-10)
 python main.py clustering-exp2    # Pretrained VAE on EMBL (0-10)
@@ -290,7 +278,6 @@ If you use this code in your research, please cite:
 @article{patch_based_querying,
   title={Patch-based Querying Identifies Structures of Interest in Electron Microscopy Data},
   author={Vyncke, Niels and Nadisic, Nicolas and Saeys, Yvan and Pižurica, Aleksandra},
-  journal={Oxford Bioinformatics},
   year={2025}
 }
 ```
