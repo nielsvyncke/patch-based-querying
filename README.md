@@ -1,6 +1,10 @@
 # Patch-based Querying for Electron Microscopy Data
 
+(this work is currently in submission)
+
 A patch-based similarity search system for identifying structures of interest in electron microscopy images using autoencoder embeddings.
+
+**Website:** [gaim.ugent.be/software/patch-based-querying](https://gaim.ugent.be/software/patch-based-querying)
 
 ## Overview
 
@@ -18,20 +22,39 @@ This repository implements a comprehensive framework for patch-based querying in
 ### System Architecture
 
 ```
-├── search_framework.py    # Main similarity search framework
-├── clustering.py          # t-SNE clustering and visualization
-├── models/               # Autoencoder model definitions
-│   ├── ae.py            # Autoencoder implementation
-│   └── vae.py           # Variational autoencoder implementation
-├── weights/             # Pre-trained model weights
+├── src/                     # Main source code
+│   ├── core/               # Core framework classes
+│   │   ├── patch_info.py   # PatchInfoRecord, PatchInfoList
+│   │   ├── search_tree.py  # SearchTree (Annoy-based)
+│   │   ├── model_utils.py  # Model loading and encoding
+│   │   └── framework.py    # SearchFramework class
+│   ├── models/             # Neural network models
+│   │   ├── ae.py          # Autoencoder implementation
+│   │   └── vae.py         # Variational autoencoder implementation
+│   ├── experiments/        # Experiment scripts
+│   │   ├── single_query.py      # Two-query retrieval experiment
+│   │   ├── multiple_queries.py  # Multiple queries experiment
+│   │   ├── evaluation_pipeline.py # Main evaluation pipeline
+│   │   └── clustering.py        # t-SNE clustering and visualization
+│   ├── utils/              # Utility functions
+│   │   ├── query_construction.py # Query building utilities
+│   │   └── evaluation.py        # Precision-recall calculations
+│   └── visualization/      # Plotting utilities
+│       └── plotting.py     # Visualization functions
+├── scripts/                # Entry point scripts
+│   └── run_experiments.py # CLI for experiments
+├── main.py                 # Simple main entry point
+├── weights/                # Pre-trained model weights
 │   ├── ae_pretrained.pth.tar
 │   ├── ae_finetuned.pth.tar
 │   ├── vae_pretrained.pth.tar
 │   └── vae_finetuned.pth.tar
-└── images/              # Dataset directory structure
-    ├── EMBL/
-    ├── EPFL/
-    └── VIB/
+├── images/                 # Dataset directory structure
+│   ├── EMBL/
+│   ├── EPFL/
+│   └── VIB/
+├── data/                   # Generated data and results
+└── results/                # Output visualizations and metrics
 ```
 
 ## Installation
@@ -76,77 +99,110 @@ images/
 │   └── labels/       # Corresponding label masks (.png)
 ```
 
-### 1. Patch-based Querying Framework
+### Quick Start
 
-Run the main search pipeline:
+The framework provides multiple entry points for different experiments:
 
 ```bash
-# Run complete evaluation pipeline
-python search_framework.py run_search
+# Main entry point (recommended)
+python main.py <experiment_type>
 
-# Run single query experiments
-python search_framework.py single_query
-
-# Run multiple query experiments
-python search_framework.py multiple_queries
+# Alternative CLI script
+python scripts/run_experiments.py <experiment_type>
 ```
 
-The framework will:
-1. Load pre-trained models
-2. Extract and encode patches from images
-3. Build search trees for positive/negative examples
-4. Compute similarity scores for all patches
-5. Generate precision-recall curves
-6. Save results and visualizations
+### Available Experiments
 
-### 2. t-SNE Clustering and Visualization
+#### 1. Evaluation Pipeline
+Run the complete evaluation with precision-recall analysis:
+```bash
+python main.py evaluation
+```
 
+#### 2. Two-Query Retrieval
+Run patch retrieval using two positive and two negative query examples:
+```bash
+python main.py two_queries
+```
+
+#### 3. Multiple Queries
+Run robust similarity search using multiple query patches:
+```bash
+python main.py multiple_queries
+```
+
+#### 4. t-SNE Clustering Experiments
 Generate t-SNE visualizations of the latent space:
 
 ```bash
-python clustering.py <experiment>
+# Show available clustering experiments
+python main.py clustering
+
+# Run specific clustering experiments
+python main.py clustering-exp1    # Pretrained AE on EMBL (0-10)
+python main.py clustering-exp2    # Pretrained VAE on EMBL (0-10)
+python main.py clustering-exp3    # Finetuned AE on EMBL (0-10)
+python main.py clustering-exp4    # Finetuned VAE on EMBL (0-10)
+python main.py clustering-exp5    # Finetuned AE on EMBL (batch processing)
+python main.py clustering-exp6    # Finetuned VAE on EMBL (batch processing)
+python main.py clustering-exp7    # Finetuned AE on VIB (multi-class)
+python main.py clustering-exp8    # Finetuned VAE on VIB (multi-class)
 ```
 
-Available experiments:
+### Experiment Details
 
 #### Pretraining vs. Finetuning Comparison
-- `exp1`: Pretrained AE on 10 slices of EMBL dataset
-- `exp2`: Pretrained VAE on 10 slices of EMBL dataset  
-- `exp3`: Finetuned AE on 10 slices of EMBL dataset
-- `exp4`: Finetuned VAE on 10 slices of EMBL dataset
+- **exp1**: Pretrained AE on 10 slices of EMBL dataset
+- **exp2**: Pretrained VAE on 10 slices of EMBL dataset  
+- **exp3**: Finetuned AE on 10 slices of EMBL dataset
+- **exp4**: Finetuned VAE on 10 slices of EMBL dataset
 
 #### Local vs. Global Analysis
-- `exp5`: Finetuned AE on full EMBL dataset and subgroups
-- `exp6`: Finetuned VAE on full EMBL dataset and subgroups
+- **exp5**: Finetuned AE on full EMBL dataset and subgroups
+- **exp6**: Finetuned VAE on full EMBL dataset and subgroups
 
 #### Multi-structure Analysis
-- `exp7`: Finetuned AE on multiple structures (VIB dataset)
-- `exp8`: Finetuned VAE on multiple structures (VIB dataset)
+- **exp7**: Finetuned AE on multiple structures (VIB dataset)
+- **exp8**: Finetuned VAE on multiple structures (VIB dataset)
 
-### 3. Custom Usage
+### Processing Pipeline
 
-#### Basic similarity search:
+The framework will:
+1. Load pre-trained models from `weights/` directory
+2. Extract and encode patches from images using autoencoders
+3. Build search trees for positive/negative examples
+4. Compute similarity scores for all patches
+5. Generate precision-recall curves and visualizations
+6. Save results to `results/` and `data/` directories
+
+### Programmatic Usage
+
+#### Basic similarity search using the new modular structure:
 
 ```python
-from search_framework import loadModel, construct_query_trees, run_search_pipeline
+from src.core import SearchFramework, loadModel
+from src.utils import construct_query_trees
 
 # Load model
 model = loadModel("ae_finetuned")
 
-# Run search pipeline
-results, query_idxs = run_search_pipeline(
-    input_dir="EMBL",
-    encoder="ae_finetuned", 
-    batch_size=10,
-    structure=1,
-    dims=[80]
+# Build query trees
+pos_tree, neg_tree = construct_query_trees(
+    query_idxs=[0, 1, 2], 
+    model=model,
+    raw_files=raw_files,
+    label_files=label_files
 )
+
+# Create framework and run search
+framework = SearchFramework(pos_tree, neg_tree, model)
+results = framework.search("EMBL")
 ```
 
 #### Generate t-SNE visualization:
 
 ```python
-from clustering import run_clustering
+from src.experiments.clustering import run_clustering
 
 # Run clustering analysis
 run_clustering(
@@ -158,6 +214,21 @@ run_clustering(
     stride=2,
     show_image=True,
     binary=True
+)
+```
+
+#### Run evaluation pipeline:
+
+```python
+from src.experiments.evaluation_pipeline import run_search_pipeline
+
+# Run complete evaluation
+results, query_idxs = run_search_pipeline(
+    input_dir="EMBL",
+    encoder="ae_finetuned", 
+    batch_size=10,
+    structure=1,
+    dims=[80]
 )
 ```
 
@@ -179,11 +250,15 @@ run_clustering(
 
 ### Generated Files
 
-- `data/DATASET/MODEL_BATCH_DIM_STRUCT_K/similarities.csv`: Similarity scores
-- `results/PR/DATASET/PR_DATASET_BATCH.png`: Precision-recall curves
-- `results/retrieved/MODEL_DATASET.png`: Retrieved patch visualizations
-- `results/TSNE/MODEL_START_END.png`: t-SNE visualizations
-- `results/evaluation_results.csv`: Comprehensive evaluation metrics
+The framework generates organized output in the following structure:
+
+- **Similarity Data**: `data/DATASET/MODEL_BATCH_DIM_STRUCT_K/similarities.csv`
+- **Precision-Recall Curves**: `results/PR/DATASET/PR_DATASET_BATCH.png`
+- **Retrieved Patches**: `results/retrieved/MODEL_DATASET_SLICE.png`
+- **Query Visualizations**: `results/retrieved/DATASET_pos_0.png`, `DATASET_neg_0.png`
+- **t-SNE Visualizations**: `results/TSNE/MODEL_START_END.png`
+- **Multiple Queries**: `results/multiple_queries/query_slice_DATASET.png`
+- **Evaluation Summary**: `results/evaluation_results.csv` (CSV and LaTeX formats)
 
 ### Evaluation Metrics
 
@@ -207,29 +282,6 @@ run_clustering(
 - **EPFL**: École Polytechnique Fédérale de Lausanne dataset  
 - **VIB**: Vlaams Instituut voor Biotechnologie dataset
 
-## Troubleshooting
-
-### Common Issues
-
-1. **CUDA out of memory**: Reduce batch size or patch dimensions
-2. **Missing dataset directories**: Ensure proper dataset structure
-3. **Model loading errors**: Verify model weights are in `weights/` directory
-4. **Visualization issues**: Check matplotlib backend configuration
-
-### Performance Tips
-
-- Use CUDA-enabled GPU for faster encoding
-- Adjust `dataset_size` parameter to limit number of processed images
-- Use appropriate `stride` values for patch extraction density
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with proper documentation
-4. Add tests if applicable
-5. Submit a pull request
-
 ## Citation
 
 If you use this code in your research, please cite:
@@ -237,7 +289,8 @@ If you use this code in your research, please cite:
 ```bibtex
 @article{patch_based_querying,
   title={Patch-based Querying Identifies Structures of Interest in Electron Microscopy Data},
-  author={Niels Vyncke},
+  author={Vyncke, Niels and Nadisic, Nicolas and Saeys, Yvan and Pižurica, Aleksandra},
+  journal={Oxford Bioinformatics},
   year={2025}
 }
 ```
@@ -249,3 +302,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Contact
 
 For questions or issues, please open an issue on GitHub or contact the author.
+
+## Acknowledgments
+
+This work is partially funded by the Flanders AI Research Program, grant 174B09119; and the Belgian Federal Science Policy (BELSPO), grant Prf-2022-050.
