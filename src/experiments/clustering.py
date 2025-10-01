@@ -11,7 +11,7 @@ import sys
 import os
 import numpy as np
 import torch
-from models import ae, vae
+from src.models import ae, vae
 from skimage.transform import resize
 import tqdm
 import imageio.v2 as imageio
@@ -332,7 +332,7 @@ def run_clustering(model='ae', dataset='EMBL', start=0, end=10, dims=[90], strid
     data = load_data(dataset, model, stride=stride, dims=dims, start=start, end=end)
     plot(data, dataset, model, start, end, show_image, binary)
 
-if __name__ == "__main__":
+def main():
     if sys.argv[1] == "exp1":
         run_clustering(model='ae_pretrained', dataset='EMBL', start=0, end=10)
     elif sys.argv[1] == "exp2":
