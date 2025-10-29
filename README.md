@@ -23,7 +23,7 @@ This repository implements a comprehensive framework for patch-based querying in
 │   │   ├── ae.py                   # Autoencoder implementation
 │   │   └── vae.py                  # Variational autoencoder implementation
 │   ├── experiments/                # Experiment scripts
-│   │   ├── single_query.py         # Two-query retrieval experiment
+│   │   ├── two_queries.py         # Two-query retrieval experiment
 │   │   ├── multiple_queries.py     # Multiple queries experiment
 │   │   ├── evaluation_pipeline.py  # Main evaluation pipeline
 │   │   └── clustering.py           # t-SNE clustering and visualization
@@ -214,7 +214,7 @@ from src.experiments.evaluation_pipeline import run_search_pipeline
 results, query_idxs = run_search_pipeline(
     input_dir="EMBL",
     encoder="ae_finetuned", 
-    batch_size=10,
+    split_size=10,
     structure=1,
     dims=[80]
 )
@@ -262,7 +262,7 @@ The framework generates organized output in the following structure:
 - `dims`: Patch dimensions (default: [80])
 - `min_overlap`: Minimum overlap for positive examples (default: 0.5)
 - `num_neighbors`: Number of nearest neighbors (default: 1)
-- `batch_size`: Batch size for query selection (default: 10, 20, 30, 50, 100)
+- `split_size`: Split size for query selection (default: 10, 20, 30, 50, 100)
 
 ### Supported Datasets
 

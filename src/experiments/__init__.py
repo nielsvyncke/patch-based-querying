@@ -3,7 +3,7 @@
 This module contains various experiments and evaluation pipelines.
 """
 
-from .single_query import retrieved_patches_two_queries
+from .two_queries import retrieved_patches_two_queries
 from .evaluation_pipeline import run_search_pipeline, main
 
 __all__ = [

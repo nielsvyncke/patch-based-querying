@@ -10,14 +10,14 @@ import os
 import matplotlib.pyplot as plt
 
 
-def plot_pr_curve(precisions, recalls, dataset, batch_size, save_path=None):
+def plot_pr_curve(precisions, recalls, dataset, split_size, save_path=None):
     """Plot precision-recall curve.
     
     Args:
         precisions (list): Precision values
         recalls (list): Recall values
         dataset (str): Dataset name for title
-        batch_size (int): Batch size for title
+        split_size (int): Split size for title
         save_path (str, optional): Directory to save plot
     """
     plt.figure(figsize=(8, 6))
@@ -41,8 +41,8 @@ def plot_pr_curve(precisions, recalls, dataset, batch_size, save_path=None):
     
     if save_path:
         os.makedirs(save_path, exist_ok=True)
-        plt.savefig(f'{save_path}/PR_{dataset}_{batch_size}.png', dpi=300, bbox_inches='tight')
+        plt.savefig(f'{save_path}/PR_{dataset}_{split_size}.png', dpi=300, bbox_inches='tight')
     else:
-        plt.savefig(f'PR_{dataset}_{batch_size}.png', dpi=300, bbox_inches='tight')
+        plt.savefig(f'PR_{dataset}_{split_size}.png', dpi=300, bbox_inches='tight')
     
     plt.close()

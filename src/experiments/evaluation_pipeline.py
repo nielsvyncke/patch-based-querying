@@ -1,7 +1,7 @@
 """Evaluation pipeline for precision-recall analysis.
 
 This module implements the main evaluation pipeline that runs experiments
-across different datasets, batch sizes, and models.
+across different datasets, split sizes, and models.
 
 Author: Niels Vyncke
 """
@@ -15,13 +15,13 @@ from src.utils import construct_query_trees, calculate_precision_recall, compute
 from src.visualization import plot_pr_curve
 
 
-def run_search_pipeline(input_dir, encoder, batch_size, structure=1, num_neighbors=1, dims=[80], min_overlap=0.5):
+def run_search_pipeline(input_dir, encoder, split_size, structure=1, num_neighbors=1, dims=[80], min_overlap=0.5):
     """Run the search pipeline for a given configuration using SearchFramework.
     
     Args:
         input_dir (str): Dataset directory name
         encoder (str): Model name (e.g., 'ae_finetuned')
-        batch_size (int): Batch size for query selection
+        split_size (int): Split size for query selection
         structure (int): Target structure label (default: 1)
         num_neighbors (int): Number of nearest neighbors (default: 1)
         dims (list): Patch dimensions (default: [80])
@@ -30,7 +30,7 @@ def run_search_pipeline(input_dir, encoder, batch_size, structure=1, num_neighbo
     Returns:
         tuple: (all_patches, query_idxs) or None if error
     """
-    print(f"Running search pipeline for {encoder}, batch_size={batch_size}, dataset={input_dir}")
+    print(f"Running search pipeline for {encoder}, split_size={split_size}, dataset={input_dir}")
     
     # Set up directories
     raw_dir = os.path.join("images", input_dir, "raw")
@@ -49,11 +49,11 @@ def run_search_pipeline(input_dir, encoder, batch_size, structure=1, num_neighbo
     # Load model
     model = loadModel(encoder)
 
-    # Select middle slice from every batch
-    query_idxs = [batch_size * i + batch_size // 2 for i in range(num_slices // batch_size)]
+    # Select middle slice from every split
+    query_idxs = [split_size * i + split_size // 2 for i in range(num_slices // split_size)]
     # Take the middle of the remaining slices
-    if num_slices % batch_size != 0:
-        query_idxs.append(num_slices - (num_slices % batch_size) // 2 - 1)
+    if num_slices % split_size != 0:
+        query_idxs.append(num_slices - (num_slices % split_size) // 2 - 1)
     
     pos_search_tree, neg_search_tree = construct_query_trees(query_idxs, model, raw_files, label_files, structure, dims, min_overlap, latent_size)
 
@@ -71,7 +71,7 @@ def run_search_pipeline(input_dir, encoder, batch_size, structure=1, num_neighbo
             all_patches.addRecord(record)
 
     # Create output directory and save results
-    output_dir = os.path.join("data", input_dir, f"{encoder}_{batch_size}_{dims[0]}_{structure}_{num_neighbors}")
+    output_dir = os.path.join("data", input_dir, f"{encoder}_{split_size}_{dims[0]}_{structure}_{num_neighbors}")
     os.makedirs(output_dir, exist_ok=True)
     
     # Write to file
@@ -86,7 +86,7 @@ def main():
     structures = [1]
     k = 1
     input_dirs = ["EMBL", "EPFL", "VIB"]
-    batch_sizes = [10, 20, 30, 50, 100]
+    split_sizes = [10, 20, 30, 50, 100]
     models = ["ae_pretrained", "vae_pretrained", "ae_finetuned", "vae_finetuned"]
     
     # Results storage
@@ -105,22 +105,22 @@ def main():
             print(f"Dataset directory not found: {dataset_dir}")
             continue
         
-        for batch_size in batch_sizes:
-            print(f"\n  Batch size: {batch_size}")
+        for split_size in split_sizes:
+            print(f"\n  Split size: {split_size}")
             
-            # Get query indices for this batch size
+            # Get query indices for this split size
             num_slices = len(os.listdir(dataset_dir))
-            query_idxs = [batch_size * i + batch_size // 2 for i in range(num_slices // batch_size)]
-            if num_slices % batch_size != 0:
-                query_idxs.append(num_slices - (num_slices % batch_size) // 2 - 1)
-            
-            batch_results = {}
+            query_idxs = [split_size * i + split_size // 2 for i in range(num_slices // split_size)]
+            if num_slices % split_size != 0:
+                query_idxs.append(num_slices - (num_slices % split_size) // 2 - 1)
+
+            split_results = {}
             
             for model in models:
                 print(f"    Processing model: {model}")
                 
                 # Check if results already exist
-                result_file = f'data/{input_dir}/{model}_{batch_size}_80_1_1/similarities.csv'
+                result_file = f'data/{input_dir}/{model}_{split_size}_80_1_1/similarities.csv'
                 
                 if os.path.exists(result_file):
                     # Load existing results
@@ -134,7 +134,7 @@ def main():
                         all_patches, _ = run_search_pipeline(
                             input_dir=input_dir,
                             encoder=model,
-                            batch_size=batch_size,
+                            split_size=split_size,
                             structure=1,
                             num_neighbors=k,
                             dims=[80]
@@ -166,7 +166,7 @@ def main():
                     
                     # Compute average precision
                     ap = compute_average_precision(precisions, recalls)
-                    batch_results[model] = {
+                    split_results[model] = {
                         'precisions': precisions,
                         'recalls': recalls,
                         'ap': ap
@@ -177,7 +177,7 @@ def main():
                     # Plot PR curve for finetuned AE
                     if model == "ae_finetuned":
                         print(f"      Generating PR curve...")
-                        plot_pr_curve(precisions, recalls, input_dir, batch_size, save_path=f"results/PR/{input_dir}")
+                        plot_pr_curve(precisions, recalls, input_dir, split_size, save_path=f"results/PR/{input_dir}")
                         
                 except Exception as e:
                     print(f"      Error calculating precision/recall: {e}")
@@ -186,8 +186,8 @@ def main():
             # Add results to table
             results_table.append([
                 input_dir,
-                batch_size,
-                *(f"{batch_results[model]['ap']:.5f}" for model in models if model in batch_results)
+                split_size,
+                *(f"{split_results[model]['ap']:.5f}" for model in models if model in split_results)
             ])
     
     # Print results table
@@ -196,7 +196,7 @@ def main():
     print("=" * 80)
     
     if results_table:
-        headers = ["Dataset", "Batch Size", "Pretrained AE", "Pretrained VAE", "Finetuned AE", "Finetuned VAE"]
+        headers = ["Dataset", "Split Size", "Pretrained AE", "Pretrained VAE", "Finetuned AE", "Finetuned VAE"]
         print(tabulate(results_table, headers=headers, tablefmt="grid"))
         
         # Save results to CSV

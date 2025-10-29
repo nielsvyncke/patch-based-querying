@@ -61,7 +61,7 @@ def encodeImage(patch, model):
     """
     # Resize patch to 64x64
     patch = transform.resize(patch, (64, 64))
-    # Convert to tensor format (batch_size=1, channels=1, height, width)
+    # Convert to tensor format (batch dimension=1, channels=1, height, width)
     patch = torch.from_numpy(patch).unsqueeze(0).unsqueeze(0).float().cuda()
     # Encode patch (VAE returns mean, logvar, sample - we use mean)
     encoding = model.encode(patch) if isinstance(model, AE) else model.encode(patch)[1]

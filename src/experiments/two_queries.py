@@ -1,4 +1,4 @@
-"""Single query experiment for patch retrieval and visualization.
+"""Two queries experiment for patch retrieval and visualization.
 
 This module implements the two-query experiment that uses two positive and 
 two negative query examples for similarity search.
@@ -127,6 +127,28 @@ def retrieved_patches_two_queries(dataset, dataset_size=5, structure=1, num_neig
             plt.savefig(f"results/retrieved/{encoder}_{input_dir}_{index}.png", bbox_inches='tight', pad_inches=0)
             plt.close()
 
+        # plot all 12 retrieved patches in a row
+        fig, ax = plt.subplots(1, 12, figsize=(20, 20))
+        for i, patch in enumerate(retrieved):
+            slice_idx, x, y, dim = patch.getLoc()
+
+            image = io.imread(raw_files[slice_idx])[x:x+dim, y:y+dim]
+            # convert to rgb
+            image = cv.cvtColor(image, cv.COLOR_GRAY2RGB)
+            # compute overlap
+            overlap = patch.getOverlap()
+            
+            # add bounding box green if overlap > 0 and red if overlap == 0
+            if overlap > 0:
+                cv.rectangle(image, (0, 0), (dim, dim), (0, 255, 0), 5)
+            else:
+                cv.rectangle(image, (0, 0), (dim, dim), (255, 0, 0), 5)
+            ax[i].imshow(image)
+            ax[i].axis("off")
+        plt.tight_layout()
+        plt.savefig(f"results/retrieved/{encoder}_{input_dir}_all.png", bbox_inches='tight', pad_inches=0)
+        plt.close()
+
         # plot positive query patches
         for i, pos_query in enumerate(pos_queries):
             fig = plt.figure()
@@ -136,7 +158,7 @@ def retrieved_patches_two_queries(dataset, dataset_size=5, structure=1, num_neig
             # convert to rgb
             patch = cv.cvtColor(patch, cv.COLOR_GRAY2RGB)
             # add green border
-            cv.rectangle(patch, (0, 0), (dim, dim), (0, 255, 0), 5)
+            #cv.rectangle(patch, (0, 0), (dim, dim), (0, 255, 0), 5)
             ax.imshow(patch)
             ax.axis("off")
             plt.savefig(f"results/retrieved/{input_dir}_pos_{i}.png", bbox_inches="tight", pad_inches=0)
@@ -151,7 +173,7 @@ def retrieved_patches_two_queries(dataset, dataset_size=5, structure=1, num_neig
             # convert to rgb
             patch = cv.cvtColor(patch, cv.COLOR_GRAY2RGB)
             # add red border
-            cv.rectangle(patch, (0, 0), (dim, dim), (255, 0, 0), 5)
+            #cv.rectangle(patch, (0, 0), (dim, dim), (255, 0, 0), 5)
             ax.imshow(patch)
             ax.axis("off")
             plt.savefig(f"results/retrieved/{input_dir}_neg_{i}.png", bbox_inches="tight", pad_inches=0)
